@@ -17,7 +17,7 @@ return new class extends Migration
                 ->constrained()
                 ->cascadeOnDelete();
 
-            $table->string('name');
+            $table->string('name',100);
 
             $table->string('phone', 20);
 
@@ -27,13 +27,15 @@ return new class extends Migration
             $table->decimal('credit_limit', 15, 2)
                 ->nullable();
 
-            $table->boolean('is_active')
-                ->default(true);
 
 
-            $table->index(['user_id', 'name']);
-            $table->index(['user_id', 'phone']);
+            $table->index([
+                'user_id', 
+                'name'
+                ]);
 
+            
+            $table->unique(['user_id', 'phone']);
 
             $table->timestamps();
         });

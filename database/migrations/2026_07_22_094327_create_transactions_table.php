@@ -13,7 +13,8 @@ return new class extends Migration
     {
         Schema::create('transactions', function (Blueprint $table) {
             $table->id();
-             $table->foreignId('user_id')
+
+            $table->foreignId('user_id')
                 ->constrained()
                 ->cascadeOnDelete();
 
@@ -37,12 +38,12 @@ return new class extends Migration
 
             $table->index([
                 'customer_id',
-                'transaction_date',
+                'transaction_date'
             ]);
 
             $table->index([
                 'user_id',
-                'type',
+                'type'
             ]);
 
         });
