@@ -13,20 +13,22 @@ class UpdateCustomerRequest extends FormRequest
     }
 
     /**
-     * تنظيف رقم الهاتف قبل التحقق.
-     *
-     * 059-123-4567
-     * يصبح:
-     * 0591234567
+     * توحيد صيغة رقم الهاتف قبل التحقق.
      */
     protected function prepareForValidation(): void
     {
         if ($this->has('phone')) {
-            $phone = preg_replace(
-                '/[^0-9]/',
-                '',
-                (string) $this->input('phone')
-            );
+            $phone = trim((string) $this->input('phone'));
+
+            if (str_starts_with($phone, '+')) {
+                $phone = '+' . (
+                    preg_replace(
+                        '/\D+/',
+                        '',
+                        substr($phone, 1)
+                    ) ?? ''
+                );
+            }
 
             $this->merge([
                 'phone' => $phone,
@@ -50,15 +52,17 @@ class UpdateCustomerRequest extends FormRequest
                 'sometimes',
                 'required',
                 'string',
-                'regex:/^[0-9]{10}$/',
+                'regex:/^\+[1-9]\d{7,14}$/',
 
                 Rule::unique('customers', 'phone')
-                    ->where(
-                        fn ($query) => $query->where(
-                            'user_id',
-                            $this->user()->id
-                        )
-                    )
+                    ->where(function ($query) {
+                        return $query
+                            ->where(
+                                'user_id',
+                                $this->user()->id
+                            )
+                            ->whereNull('deleted_at');
+                    })
                     ->ignore($customerId),
             ],
 
@@ -67,7 +71,7 @@ class UpdateCustomerRequest extends FormRequest
                 'nullable',
                 'numeric',
                 'min:0',
-                'max:9999999999999.99',
+                'max:999999.99',
             ],
 
             'notes' => [
@@ -82,21 +86,44 @@ class UpdateCustomerRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.required' => 'اسم الزبون مطلوب.',
-            'name.string' => 'اسم الزبون يجب أن يكون نصًا.',
-            'name.max' => 'اسم الزبون يجب ألا يتجاوز 100 حرف.',
+            'name.required'
+                => 'اسم الزبون مطلوب.',
 
-            'phone.required' => 'رقم هاتف الزبون مطلوب.',
-            'phone.string' => 'رقم هاتف الزبون يجب أن يكون نصًا.',
-            'phone.regex' => 'رقم هاتف الزبون يجب أن يتكون من 10 أرقام.',
-            'phone.unique' => 'يوجد زبون مسجل بهذا الرقم مسبقًا.',
+            'name.string'
+                => 'اسم الزبون يجب أن يكون نصًا.',
 
-            'credit_limit.numeric' => 'الحد الائتماني يجب أن يكون رقمًا.',
-            'credit_limit.min' => 'الحد الائتماني يجب ألا يكون أقل من صفر.',
-            'credit_limit.max' => 'قيمة الحد الائتماني تتجاوز الحد المسموح.',
+            'name.max'
+                => 'اسم الزبون يجب ألا يتجاوز 100 حرف.',
 
-            'notes.string' => 'الملاحظات يجب أن تكون نصًا.',
-            'notes.max' => 'الملاحظات يجب ألا تتجاوز 1000 حرف.',
+
+            'phone.required'
+                => 'رقم هاتف الزبون مطلوب.',
+
+            'phone.string'
+                => 'رقم هاتف الزبون غير صالح.',
+
+            'phone.regex'
+                => 'رقم هاتف الزبون يجب أن يكون بالصيغة الدولية الصحيحة.',
+
+            'phone.unique'
+                => 'يوجد زبون مسجل بهذا الرقم مسبقًا.',
+
+
+            'credit_limit.numeric'
+                => 'سقف الدين يجب أن يكون رقمًا.',
+
+            'credit_limit.min'
+                => 'سقف الدين يجب ألا يكون أقل من صفر.',
+
+            'credit_limit.max'
+                => 'قيمة سقف الدين أكبر من الحد المسموح.',
+
+
+            'notes.string'
+                => 'الملاحظات يجب أن تكون نصًا.',
+
+            'notes.max'
+                => 'الملاحظات يجب ألا تتجاوز 1000 حرف.',
         ];
     }
 }

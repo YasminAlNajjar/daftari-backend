@@ -35,43 +35,79 @@ class CustomerController extends Controller
         $validated = $request->validated();
 
         $search = $validated['search'] ?? null;
-        $perPage = $validated['per_page'] ?? 15;
+        $perPage = $validated['per_page'] ?? 10;
 
         $customers = $request->user()
-         ->customers()
-         ->when($search, function ($query, $search) {
-            $query->where(function ($query) use ($search) {
-                $query
-                    ->where('name', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%");
-            });
-         })
-         ->orderBy('name')
-         ->orderBy('id')
-         ->paginate($perPage)
-         ->withQueryString();
+            ->customers()
+
+        /*
+         * البحث بالاسم أو رقم الهاتف.
+         */
+            ->when($search, function ($query, $search) {
+                $query->where(function ($query) use ($search) {
+                    $query->where('name','like',"%{$search}%" )
+                            ->orWhere('phone','like',"%{$search}%");
+                });
+            })
+
+        /*
+         * أحدث زبون يظهر أولًا.
+         */
+            ->orderByDesc('id')
+
+        /*
+         * Pagination.
+         */
+            ->paginate($perPage)
+            ->withQueryString();
+        /*
+        * التحقق من أن رقم الصفحة المطلوب موجود.
+        */
+
+        if ($customers->currentPage() > $customers->lastPage()&& $customers->total() > 0) {
+            return ApiResponse::error(
+                'رقم الصفحة المطلوبة غير موجود.',
+                'PAGE_NOT_FOUND',
+                 404
+            );
+        }
 
         return ApiResponse::success(
-         'تم جلب الزبائن بنجاح.',
-          [
-            'customers' => CustomerListResource::collection(
-                $customers->getCollection()
-            ),
+            'تم جلب الزبائن بنجاح.',
+            [
+                'customers' => CustomerListResource::collection(
+                    $customers->getCollection()
+                ),
 
-            'pagination' => [
-                'current_page' => $customers->currentPage(),
-                'last_page' => $customers->lastPage(),
-                'per_page' => $customers->perPage(),
-                'total' => $customers->total(),
-                'from' => $customers->firstItem(),
-                'to' => $customers->lastItem(),
-                'has_more_pages' => $customers->hasMorePages(),
-             ],
+                'pagination' => [
+                    'current_page'
+                        => $customers->currentPage(),
+
+                    'last_page'
+                        => $customers->lastPage(),
+
+                    'per_page'
+                        => $customers->perPage(),
+
+                    'total'
+                        => $customers->total(),
+
+                    'has_next_page'
+                        => $customers->hasMorePages(),
+
+                    'has_previous_page'
+                        => $customers->currentPage() > 1,
+                ],
             ]
-     );
+        );
+
     }
 
     public function update(UpdateCustomerRequest $request,int $customer): JsonResponse {
+    /*
+     * البحث فقط ضمن زبائن المستخدم الحالي.
+     * Soft-deleted customers يتم استبعادهم .
+     */
         $customerModel = $request->user()
             ->customers()
             ->find($customer);
@@ -80,13 +116,16 @@ class CustomerController extends Controller
             return ApiResponse::error(
                 'الزبون غير موجود.',
                 'CUSTOMER_NOT_FOUND',
-                 404
+                404
             );
         }
 
         $validated = $request->validated();
 
-         if (empty($validated)) {
+    /*
+     * منع PATCH فارغ.
+     */
+        if (empty($validated)) {
             return ApiResponse::error(
                 'لم يتم إرسال أي بيانات للتعديل.',
                 'NO_FIELDS_TO_UPDATE',
@@ -94,14 +133,22 @@ class CustomerController extends Controller
             );
         }
 
+    /*
+     * تحديث البيانات.
+     */
         $customerModel->update($validated);
 
+    /*
+     * إعادة تحميل البيانات بعد التعديل.
+     */
         $customerModel->refresh();
 
         return ApiResponse::success(
             'تم تعديل بيانات الزبون بنجاح.',
             [
-                'customer' => new CustomerResource($customerModel),
+                'customer' => new CustomerResource(
+                    $customerModel
+                ),
             ]
         );
     }
@@ -126,4 +173,31 @@ class CustomerController extends Controller
             ]
         );
     }
+
+    public function destroy(Request $request,int $customer): JsonResponse {
+    /*
+     * البحث فقط ضمن زبائن المستخدم الحالي.
+     */
+        $customerModel = $request->user()
+            ->customers()
+            ->find($customer);
+
+        if (! $customerModel) {
+             return ApiResponse::error(
+                'الزبون غير موجود.',
+                'CUSTOMER_NOT_FOUND',
+                404
+            );
+        }
+
+    /*
+     * Soft Delete.
+     */
+        $customerModel->delete();
+
+         return ApiResponse::success(
+            'تم حذف الزبون بنجاح.'
+        );
+    }
 }
+

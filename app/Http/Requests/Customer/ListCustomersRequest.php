@@ -11,6 +11,18 @@ class ListCustomersRequest extends FormRequest
         return true;
     }
 
+    /**
+     * تنظيف قيمة البحث قبل التحقق منها.
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('search')) {
+            $this->merge([
+                'search' => trim((string) $this->input('search')),
+            ]);
+        }
+    }
+
     public function rules(): array
     {
         return [
@@ -30,7 +42,7 @@ class ListCustomersRequest extends FormRequest
                 'nullable',
                 'integer',
                 'min:1',
-                'max:50',
+                'max:10',
             ],
         ];
     }
@@ -38,15 +50,26 @@ class ListCustomersRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'search.string' => 'قيمة البحث يجب أن تكون نصًا.',
-            'search.max' => 'قيمة البحث يجب ألا تتجاوز 100 حرف.',
+            'search.string'
+                => 'قيمة البحث يجب أن تكون نصًا.',
 
-            'page.integer' => 'رقم الصفحة يجب أن يكون رقمًا صحيحًا.',
-            'page.min' => 'رقم الصفحة يجب أن يبدأ من 1.',
+            'search.max'
+                => 'قيمة البحث يجب ألا تتجاوز 100 حرف.',
 
-            'per_page.integer' => 'عدد الزبائن في الصفحة يجب أن يكون رقمًا صحيحًا.',
-            'per_page.min' => 'عدد الزبائن في الصفحة يجب ألا يقل عن 1.',
-            'per_page.max' => 'عدد الزبائن في الصفحة يجب ألا يتجاوز 50.',
+            'page.integer'
+                => 'رقم الصفحة يجب أن يكون رقمًا صحيحًا.',
+
+            'page.min'
+                => 'رقم الصفحة يجب أن يبدأ من 1.',
+
+            'per_page.integer'
+                => 'عدد الزبائن في الصفحة يجب أن يكون رقمًا صحيحًا.',
+
+            'per_page.min'
+                => 'عدد الزبائن في الصفحة يجب أن يكون 1 على الأقل.',
+
+            'per_page.max'
+                => 'لا يمكن عرض أكثر من 10 زبائن في الصفحة.',
         ];
     }
 }

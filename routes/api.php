@@ -14,9 +14,10 @@ Route::post('/auth/complete-profile', [AuthController::class, 'completeProfile']
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
-
+//Customer routes
     Route::post('/customers', [CustomerController::class, 'store']);
     Route::get('/customers', [CustomerController::class, 'index']);
     Route::patch('/customers/{customer}',[CustomerController::class, 'update'])->whereNumber('customer');
     Route::get('/customers/{customer}',[CustomerController::class, 'show'])->whereNumber('customer');
+    Route::delete('/customers/{customer}',[CustomerController::class, 'destroy'])->whereNumber('customer');
 });
