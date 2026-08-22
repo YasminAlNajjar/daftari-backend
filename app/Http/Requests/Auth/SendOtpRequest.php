@@ -20,7 +20,7 @@ class SendOtpRequest extends FormRequest
             'phone' => [
                 'required',
                 'string',
-                'regex:/^\+[1-9]\d{7,14}$/',
+                'regex:/^\+(970|972)\d{9}$/',
             ],
         ];
     }

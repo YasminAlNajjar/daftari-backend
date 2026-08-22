@@ -52,7 +52,7 @@ class UpdateCustomerRequest extends FormRequest
                 'sometimes',
                 'required',
                 'string',
-                'regex:/^\+[1-9]\d{7,14}$/',
+                'regex:/^\+(970|972)\d{9}$/',
 
                 Rule::unique('customers', 'phone')
                     ->where(function ($query) {
