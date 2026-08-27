@@ -17,10 +17,10 @@ class VerifyOtpRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'phone' => [
+            'email' => [
                 'required',
-                'string',
-                'regex:/^\+[1-9]\d{7,14}$/',
+                'email',
+                'max:150',
             ],
 
             'code' => [
@@ -34,52 +34,23 @@ class VerifyOtpRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'phone.required' => 'PHONE_REQUIRED',
-            'phone.string' => 'INVALID_PHONE',
-            'phone.regex' => 'INVALID_PHONE',
+            'email.required' => 'البريد الإلكتروني مطلوب.',
+            'email.email' => 'يرجى إدخال بريد إلكتروني صالح.',
+            'email.max' => 'البريد الإلكتروني يجب ألا يتجاوز 150 حرفًا.',
 
-            'code.required' => 'OTP_CODE_REQUIRED',
-            'code.string' => 'INVALID_OTP_FORMAT',
-            'code.digits' => 'INVALID_OTP_FORMAT',
+            'code.required' => 'رمز التحقق مطلوب.',
+            'code.string' => 'رمز التحقق غير صالح.',
+            'code.digits' => 'رمز التحقق يجب أن يتكون من 6 أرقام.',
         ];
     }
 
-    protected function failedValidation(Validator $validator): void
-    {
-        $validationCode = $validator->errors()->first();
-
-        [$message, $errorCode] = match ($validationCode) {
-            'PHONE_REQUIRED' => [
-                'رقم الهاتف مطلوب.',
-                'PHONE_REQUIRED',
-            ],
-
-            'INVALID_PHONE' => [
-                'رقم الهاتف بصيغة غير صحيحة.',
-                'INVALID_PHONE',
-            ],
-
-            'OTP_CODE_REQUIRED' => [
-                'رمز التحقق مطلوب.',
-                'OTP_CODE_REQUIRED',
-            ],
-
-            'INVALID_OTP_FORMAT' => [
-                'رمز التحقق يجب أن يتكون من 6 أرقام.',
-                'INVALID_OTP_FORMAT',
-            ],
-
-            default => [
-                'البيانات المدخلة غير صالحة.',
-                'VALIDATION_ERROR',
-            ],
-        };
-
+    protected function failedValidation(Validator $validator): void {
         throw new HttpResponseException(
             ApiResponse::error(
-                $message,
-                $errorCode,
-                422
+                'البيانات المدخلة غير صالحة.',
+                'VALIDATION_ERROR',
+                422,
+                $validator->errors()->toArray()
             )
         );
     }

@@ -190,9 +190,6 @@ class CustomerController extends Controller
             );
         }
 
-    /*
-     * Soft Delete.
-     */
         $customerModel->delete();
 
          return ApiResponse::success(

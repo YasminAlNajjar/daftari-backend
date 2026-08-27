@@ -17,10 +17,10 @@ class SendOtpRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'phone' => [
+            'email' => [
                 'required',
-                'string',
-                'regex:/^\+(970|972)\d{9}$/',
+                'email',
+                'max:150',
             ],
         ];
     }
@@ -28,30 +28,19 @@ class SendOtpRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'phone.required' => 'رقم الهاتف مطلوب.',
-            'phone.string' => 'رقم الهاتف غير صالح.',
-            'phone.regex' => 'رقم الهاتف بصيغة غير صحيحة.',
+            'email.required' => 'البريد الإلكتروني مطلوب.',
+            'email.email' => 'يرجى إدخال بريد إلكتروني صالح.',
+            'email.max' => 'البريد الإلكتروني يجب ألا يتجاوز 150 حرفًا.',
         ];
     }
 
-    protected function failedValidation(Validator $validator): void
-    {
-        $errors = $validator->errors();
-
-        $code = $errors->has('phone')
-            && in_array('رقم الهاتف مطلوب.', $errors->get('phone'))
-                ? 'PHONE_REQUIRED'
-                : 'INVALID_PHONE';
-
-        $message = $code === 'PHONE_REQUIRED'
-            ? 'رقم الهاتف مطلوب.'
-            : 'رقم الهاتف بصيغة غير صحيحة.';
-
+    protected function failedValidation(Validator $validator): void {
         throw new HttpResponseException(
             ApiResponse::error(
-                $message,
-                $code,
-                422
+                'البيانات المدخلة غير صالحة.',
+                'VALIDATION_ERROR',
+                422,
+                $validator->errors()->toArray()
             )
         );
     }

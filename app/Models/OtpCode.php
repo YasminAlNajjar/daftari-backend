@@ -10,7 +10,7 @@ class OtpCode extends Model
     use HasFactory;
 
     protected $fillable = [
-        'phone',
+        'email',
         'code_hash',
         'attempts',
         'send_count',
@@ -26,7 +26,6 @@ class OtpCode extends Model
         return [
             'attempts' => 'integer',
             'send_count' => 'integer',
-
             'send_window_started_at' => 'datetime',
             'blocked_until' => 'datetime',
             'expires_at' => 'datetime',
@@ -35,33 +34,21 @@ class OtpCode extends Model
         ];
     }
 
-    /**
-     * هل انتهت صلاحية الكود؟
-     */
     public function isExpired(): bool
     {
         return $this->expires_at->isPast();
     }
 
-    /**
-     * هل استهلك المستخدم جميع محاولات إدخال الكود؟
-     */
     public function hasExceededAttempts(): bool
     {
         return $this->attempts >= 3;
     }
 
-    /**
-     * هل تم استخدام الكود والتحقق منه مسبقًا؟
-     */
     public function isVerified(): bool
     {
         return $this->verified_at !== null;
     }
 
-    /**
-     * هل رقم الهاتف محظور مؤقتًا من طلب OTP؟
-     */
     public function isBlocked(): bool
     {
         return $this->blocked_until !== null

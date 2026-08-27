@@ -8,168 +8,158 @@ use Throwable;
 
 class OtpService
 {
-    private const OTP_EXPIRY_SECONDS = 120;
-    private const MAX_WRONG_ATTEMPTS = 3;
-    private const RESEND_COOLDOWN_SECONDS = 60;
-    private const MAX_SENDS_PER_HOUR = 3;
-    private const BLOCK_DURATION_MINUTES = 60;
+    private const OTP_EXPIRES_IN = 120;
+    private const RESEND_AFTER = 60;
+    private const MAX_SENDS = 3;
+    private const MAX_ATTEMPTS = 3;
+    private const BLOCK_MINUTES = 60;
 
     public function __construct(
-        private WhatsappService $whatsappService
+        private readonly EmailService $emailService
     ) {
     }
 
-    public function send(string $phone): array
+    public function send(string $email): array
     {
-         $lastOtp = OtpCode::query()
-            ->where('phone', $phone)
+        $now = now();
+
+        $lastOtp = OtpCode::query()
+            ->where('email', $email)
             ->latest('id')
             ->first();
 
-        $now = now();
-
-    /*
-     * 1. التحقق هل الرقم محظور حاليًا.
-     */
+        /*
+         * إذا كان الإيميل محظورًا.
+         */
         if ($lastOtp?->isBlocked()) {
             return [
                 'success' => false,
                 'code' => 'OTP_SEND_LIMIT_EXCEEDED',
-                'retry_after' => (int) $now->diffInSeconds(
+                'message' => 'تم تجاوز الحد المسموح لإرسال رمز التحقق.',
+                'retry_after' => $now->diffInSeconds(
                     $lastOtp->blocked_until
                 ),
             ];
         }
 
-    /*
-     * 2. منع إعادة الإرسال قبل مرور 60 ثانية.
-     */
+        /*
+         * منع إعادة الإرسال قبل مرور 60 ثانية.
+         */
         if (
-            $lastOtp?->last_sent_at !== null
-            && $lastOtp->last_sent_at
+            $lastOtp?->last_sent_at &&
+            $lastOtp->last_sent_at
                 ->copy()
-                ->addSeconds(self::RESEND_COOLDOWN_SECONDS)
+                ->addSeconds(self::RESEND_AFTER)
                 ->isFuture()
         ) {
-            $availableAt = $lastOtp->last_sent_at
-                ->copy()
-                ->addSeconds(self::RESEND_COOLDOWN_SECONDS);
-
             return [
                 'success' => false,
                 'code' => 'OTP_RESEND_TOO_SOON',
-            'retry_after' => (int) $now->diffInSeconds($availableAt),
+                'message' => 'يرجى الانتظار قبل طلب رمز تحقق جديد.',
+                'retry_after' => $now->diffInSeconds(
+                    $lastOtp->last_sent_at
+                        ->copy()
+                        ->addSeconds(self::RESEND_AFTER)
+                ),
             ];
         }
 
-    /*
-     * 3. حساب عدد مرات الإرسال خلال نافذة الساعة.
-     *
-     * إذا انتهت نافذة الساعة:
-     * نبدأ من جديد بـ send_count = 1.
-     */
+        /*
+         * حساب عدد مرات الإرسال داخل النافذة الحالية.
+         */
         $sendCount = 1;
-        $windowStartedAt = $now;
+        $sendWindowStartedAt = $now;
 
         if (
-            $lastOtp?->send_window_started_at !== null
-            && $lastOtp->send_window_started_at
+            $lastOtp?->send_window_started_at &&
+            $lastOtp->send_window_started_at
                 ->copy()
                 ->addHour()
                 ->isFuture()
         ) {
             $sendCount = $lastOtp->send_count + 1;
-            $windowStartedAt = $lastOtp->send_window_started_at;
+            $sendWindowStartedAt = $lastOtp->send_window_started_at;
         }
 
-    /*
-     * حماية إضافية:
-     * لا نسمح أبدًا بإرسالية رقم 4 داخل نفس النافذة.
-     */
-        if ($sendCount > self::MAX_SENDS_PER_HOUR) {
+        /*
+         * حماية إضافية.
+         */
+        if ($sendCount > self::MAX_SENDS) {
             return [
                 'success' => false,
                 'code' => 'OTP_SEND_LIMIT_EXCEEDED',
-                'retry_after' => self::BLOCK_DURATION_MINUTES * 60,
+                'message' => 'تم تجاوز الحد المسموح لإرسال رمز التحقق.',
+                'retry_after' => self::BLOCK_MINUTES * 60,
             ];
         }
 
-    /*
-     * 4. إذا كانت هذه الإرسالية الثالثة，
-     * سيتم إرسالها بشكل طبيعي，
-     * لكن بعدها يمنع طلب OTP جديد لمدة ساعة.
-     */
+        /*
+         * الإرسال الثالث مسموح،
+         * وبعده يبدأ الحظر لمدة ساعة.
+         */
         $blockedUntil = null;
 
-        if ($sendCount === self::MAX_SENDS_PER_HOUR) {
-             $blockedUntil = $now->copy()
-                ->addMinutes(self::BLOCK_DURATION_MINUTES);
+        if ($sendCount === self::MAX_SENDS) {
+            $blockedUntil = $now
+                ->copy()
+                ->addMinutes(self::BLOCK_MINUTES);
         }
 
-    /*
-     * 5. WhatsappService:
-     * - يولد OTP
-     * - يرسله للمستخدم
-     * - يرجع الكود إلى OtpService
-     */
+        /*
+         * إرسال OTP عبر البريد.
+         */
         try {
-            $plainCode = $this->whatsappService->sendOtp($phone);
+            $otp = $this->emailService->sendOtp($email);
         } catch (Throwable $exception) {
             report($exception);
 
             return [
                 'success' => false,
-                'code' => 'WHATSAPP_PROVIDER_UNAVAILABLE',
+                'code' => 'EMAIL_PROVIDER_UNAVAILABLE',
+                'message' => 'تعذر إرسال رمز التحقق عبر البريد الإلكتروني.',
             ];
         }
 
-    /*
-     * 6. بعد نجاح الإرسال نحفظ Hash الكود.
-     */
-        $otp = OtpCode::create([
-            'phone' => $phone,
-            'code_hash' => Hash::make($plainCode),
-            'attempts' => 0,
-
-            'send_count' => $sendCount,
-            'send_window_started_at' => $windowStartedAt,
-            'blocked_until' => $blockedUntil,
-
-            'expires_at' => $now->copy()
-                ->addSeconds(self::OTP_EXPIRY_SECONDS),
-
-            'last_sent_at' => $now,
-            'verified_at' => null,
-        ]);
-
-    /*
-     * 7. إلغاء جميع الأكواد السابقة غير المستخدمة.
-     *
-     * لا نحذفها حتى نحتفظ بسجل عمليات الإرسال.
-     */
+        /*
+         * إبطال أي OTP سابق لم يتم استخدامه.
+         */
         OtpCode::query()
-            ->where('phone', $phone)
-            ->where('id', '!=', $otp->id)
+            ->where('email', $email)
             ->whereNull('verified_at')
+            ->where('expires_at', '>', $now)
             ->update([
                 'expires_at' => $now,
             ]);
 
-    /*
-     * 8. نجاح العملية.
-     */
+        /*
+         * حفظ OTP الجديد.
+         */
+        OtpCode::create([
+            'email' => $email,
+            'code_hash' => Hash::make($otp),
+            'attempts' => 0,
+            'send_count' => $sendCount,
+            'send_window_started_at' => $sendWindowStartedAt,
+            'blocked_until' => $blockedUntil,
+            'expires_at' => $now
+                ->copy()
+                ->addSeconds(self::OTP_EXPIRES_IN),
+            'last_sent_at' => $now,
+        ]);
+
         return [
             'success' => true,
-            'expires_in' => self::OTP_EXPIRY_SECONDS,
-            'resend_after' => self::RESEND_COOLDOWN_SECONDS,
+            'expires_in' => self::OTP_EXPIRES_IN,
+            'resend_after' => self::RESEND_AFTER,
         ];
     }
 
-
-
-    public function verify(string $phone, string $code): array
-    {
-        $otp = OtpCode::where('phone', $phone)
+    public function verify(
+        string $email,
+        string $code
+    ): array {
+        $otp = OtpCode::query()
+            ->where('email', $email)
             ->whereNull('verified_at')
             ->latest('id')
             ->first();
@@ -178,6 +168,7 @@ class OtpService
             return [
                 'success' => false,
                 'code' => 'OTP_NOT_FOUND',
+                'message' => 'لم يتم العثور على رمز تحقق صالح.',
             ];
         }
 
@@ -185,6 +176,7 @@ class OtpService
             return [
                 'success' => false,
                 'code' => 'OTP_EXPIRED',
+                'message' => 'انتهت صلاحية رمز التحقق.',
             ];
         }
 
@@ -192,16 +184,19 @@ class OtpService
             return [
                 'success' => false,
                 'code' => 'OTP_MAX_ATTEMPTS',
+                'message' => 'تم تجاوز عدد محاولات التحقق المسموح بها.',
             ];
         }
 
+        /*
+         * الكود غير صحيح.
+         */
         if (! Hash::check($code, $otp->code_hash)) {
             $otp->increment('attempts');
-            $otp->refresh();
 
             $remaining = max(
                 0,
-                self::MAX_WRONG_ATTEMPTS - $otp->attempts
+                self::MAX_ATTEMPTS - $otp->attempts
             );
 
             if ($remaining === 0) {
@@ -212,6 +207,7 @@ class OtpService
                 return [
                     'success' => false,
                     'code' => 'OTP_MAX_ATTEMPTS',
+                    'message' => 'تم تجاوز عدد محاولات التحقق المسموح بها.',
                     'attempts_remaining' => 0,
                 ];
             }
@@ -219,17 +215,21 @@ class OtpService
             return [
                 'success' => false,
                 'code' => 'OTP_INVALID',
+                'message' => 'رمز التحقق غير صحيح.',
                 'attempts_remaining' => $remaining,
             ];
         }
 
+        /*
+         * OTP صحيح.
+         */
         $otp->update([
             'verified_at' => now(),
         ]);
 
         return [
             'success' => true,
-            'phone' => $phone,
+            'email' => $email,
         ];
     }
 }
