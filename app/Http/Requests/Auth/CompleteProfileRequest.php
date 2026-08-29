@@ -53,7 +53,7 @@ class CompleteProfileRequest extends FormRequest
             'phone' => [
                 'required',
                 'string',
-                'regex:/^\+970(59|56)\d{7}$/',
+                'regex:/^\+(?:970|972)(?:59|56)\d{7}$/',
                 Rule::unique('users', 'phone'),
             ],
 
