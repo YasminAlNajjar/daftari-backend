@@ -7,14 +7,12 @@ use Illuminate\Support\Facades\Mail;
 
 class EmailService
 {
-    public function sendOtp(string $email): string
-    {
-        $otp = (string) random_int(100000, 999999);
-
+    public function sendOtp(
+        string $email,
+        string $otp
+    ): void {
         Mail::to($email)->send(
             new OtpMail($otp)
         );
-
-        return $otp;
     }
 }

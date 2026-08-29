@@ -108,8 +108,10 @@ class OtpService
         /*
          * إرسال OTP عبر البريد.
          */
+        $otp = (string) random_int(100000, 999999);
+
         try {
-            $otp = $this->emailService->sendOtp($email);
+            $this->emailService->sendOtp($email,$otp);
         } catch (Throwable $exception) {
             report($exception);
 
