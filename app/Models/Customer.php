@@ -56,6 +56,6 @@ class Customer extends Model
         ->where('type', Transaction::TYPE_PAYMENT)
         ->sum('amount');
 
-         return number_format($debts - $payments, 2, '.', '');
+         return number_format($payments - $debts, 2, '.', '');
    }
 }
