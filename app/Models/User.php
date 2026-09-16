@@ -35,4 +35,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(Transaction::class);
     }
+
+    public function reportCertificates(): HasMany
+    {
+    return $this->hasMany(ReportCertificate::class);
+    }
 }

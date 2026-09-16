@@ -31,6 +31,7 @@ class StoreTransactionRequest extends FormRequest
             'transaction_date' => [
                 'required',
                 'date',
+                'before_or_equal:now',
             ],
 
             'description' => [
@@ -67,6 +68,9 @@ class StoreTransactionRequest extends FormRequest
 
             'transaction_date.date'
                 => 'تاريخ المعاملة غير صالح.',
+
+            'transaction_date.before_or_equal'
+                => 'تاريخ المعاملة لا يمكن أن يكون في المستقبل.',
 
             'description.string'
                 => 'وصف المعاملة يجب أن يكون نصًا.',
