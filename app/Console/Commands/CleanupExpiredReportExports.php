@@ -44,6 +44,7 @@ class CleanupExpiredReportExports extends Command
                     &$deletedCount
                 ) {
                     foreach ($exports as $export) {
+                            /** @var ReportExport $export */
 
                         $disk->delete(
                             $export->temporary_file_path
