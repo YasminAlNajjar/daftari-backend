@@ -14,6 +14,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Illuminate\Support\Facades\DB;
 use App\Services\ReportCertificateService;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Filesystem\FilesystemAdapter;
 
 class ReportExportController extends Controller
 {
@@ -222,71 +223,114 @@ class ReportExportController extends Controller
         );
     }
 
-    public function download(Request $request,ReportExport $export) 
-    {
+    public function download(
+    Request $request,
+    ReportExport $export
+) {
+    /*
+    |--------------------------------------------------------------------------
+    | Ownership Check
+    |--------------------------------------------------------------------------
+    */
 
-        if (
-            (int)$export->user_id !==
-            (int)$request->user()->id
-        ) {
-            return ApiResponse::error(
-                'غير مصرح لك بتنزيل هذا التقرير.',
-                'FORBIDDEN',
-                403
-            );
-        }
-
-
-        if (
-            $export->expires_at &&
-            $export->expires_at->isPast()
-        ) {
-            return ApiResponse::error(
-                'انتهت صلاحية رابط تنزيل التقرير.',
-                'REPORT_EXPORT_EXPIRED',
-                410
-            );
-        }
-
-        if (
-            $export->status !==
-            ReportExport::STATUS_COMPLETED
-        ) {
-            return ApiResponse::error(
-                'التقرير غير جاهز للتنزيل.',
-                'REPORT_NOT_READY',
-                409
-            );
-        }
-
-        $disk = Storage::disk('local');
-
-        $filePath = $export->temporary_file_path;
-
-        if ( !$filePath || !$disk->exists($filePath)) 
-        {
-            return ApiResponse::error(
-                'ملف PDF غير متوفر.',
-                'REPORT_FILE_NOT_FOUND',
-                404
-            );
-        }
-
-        $fileName =
-            $export->report_type
-            . '-'
-            . $export->id
-            . '.pdf';
-
-        return response()->download(
-            $disk->path($filePath),
-            $fileName,
-            [
-                'Content-Type' =>
-                    'application/pdf',
-            ]
+    if (
+        (int) $export->user_id !==
+        (int) $request->user()->id
+    ) {
+        return ApiResponse::error(
+            'غير مصرح لك بتنزيل هذا التقرير.',
+            'FORBIDDEN',
+            403
         );
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Expiration Check
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        $export->expires_at &&
+        $export->expires_at->isPast()
+    ) {
+        return ApiResponse::error(
+            'انتهت صلاحية رابط تنزيل التقرير.',
+            'REPORT_EXPORT_EXPIRED',
+            410
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Status Check
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        $export->status !==
+        ReportExport::STATUS_COMPLETED
+    ) {
+        return ApiResponse::error(
+            'التقرير غير جاهز للتنزيل.',
+            'REPORT_NOT_READY',
+            409
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Reports Storage Disk
+    |--------------------------------------------------------------------------
+    */
+
+    $disk = Storage::disk(
+        config(
+            'filesystems.reports_disk',
+            'local'
+        )
+    );
+
+    $filePath =
+        $export->temporary_file_path;
+
+    /*
+    |--------------------------------------------------------------------------
+    | File Check
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        !$filePath ||
+        !$disk->exists($filePath)
+    ) {
+        return ApiResponse::error(
+            'ملف PDF غير متوفر.',
+            'REPORT_FILE_NOT_FOUND',
+            404
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Download
+    |--------------------------------------------------------------------------
+    */
+
+    $fileName =
+        $export->report_type
+        . '-'
+        . $export->id
+        . '.pdf';
+/** @var FilesystemAdapter $disk */
+    return $disk->download(
+        $filePath,
+        $fileName,
+        [
+            'Content-Type' =>
+                'application/pdf',
+        ]
+    );
+}
 
 }

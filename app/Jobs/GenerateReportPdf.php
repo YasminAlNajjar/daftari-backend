@@ -84,8 +84,7 @@ class GenerateReportPdf implements ShouldQueue, ShouldBeEncrypted
 
         if (
             !hash_equals(
-                $certificate
-                    ->verification_token_hash,
+                $certificate->verification_token_hash,
                 $receivedTokenHash
             )
         ) {
@@ -98,9 +97,6 @@ class GenerateReportPdf implements ShouldQueue, ShouldBeEncrypted
         |--------------------------------------------------------------------------
         | Verification URL
         |--------------------------------------------------------------------------
-        |
-        | هذا الرابط سيدخل داخل QR الموجود في التقرير.
-        |
         */
 
         $verificationUrl =
@@ -113,19 +109,6 @@ class GenerateReportPdf implements ShouldQueue, ShouldBeEncrypted
         |--------------------------------------------------------------------------
         | Prepare Report
         |--------------------------------------------------------------------------
-        |
-        | الـ Job لا يعرف:
-        |
-        | - date
-        | - customer_id
-        | - from_date
-        | - to_date
-        | - type
-        | - filter
-        | - sort
-        |
-        | كل هذه المسؤولية داخل ReportExportManager.
-        |
         */
 
         $prepared =
@@ -164,33 +147,36 @@ class GenerateReportPdf implements ShouldQueue, ShouldBeEncrypted
 
         /*
         |--------------------------------------------------------------------------
-        | Report Directory
+        | Reports Storage Disk
         |--------------------------------------------------------------------------
+        |
+        | Local:
+        | REPORTS_DISK غير موجود → local
+        |
+        | Railway:
+        | REPORTS_DISK=reports → Railway Bucket
+        |
         */
 
+        $diskName =
+            config(
+                'filesystems.reports_disk',
+                'local'
+            );
+
         $disk =
-            Storage::disk('local');
-
-        $directory =
-            'report-exports';
-
-        $disk->makeDirectory(
-            $directory
-        );
+            Storage::disk(
+                $diskName
+            );
 
         /*
         |--------------------------------------------------------------------------
-        | File Name
+        | Final File Path
         |--------------------------------------------------------------------------
-        |
-        | أمثلة:
-        |
-        | daily_inventory-12.pdf
-        | customer_statement-13.pdf
-        | general_transactions-14.pdf
-        | customer_balances-15.pdf
-        |
         */
+
+        $directory =
+            'report-exports';
 
         $fileName =
             $export->report_type
@@ -203,10 +189,30 @@ class GenerateReportPdf implements ShouldQueue, ShouldBeEncrypted
             . '/'
             . $fileName;
 
-        $absolutePath =
-            $disk->path(
-                $relativePath
+        /*
+        |--------------------------------------------------------------------------
+        | Temporary Local PDF
+        |--------------------------------------------------------------------------
+        |
+        | mPDF يحتاج مسارًا محليًا فعليًا.
+        | لذلك ننشئ PDF مؤقتًا داخل Worker،
+        | ثم نرفعه إلى الـ storage disk.
+        |
+        */
+
+        $tempReportDirectory =
+            storage_path(
+                'app/report-temp'
             );
+
+        File::ensureDirectoryExists(
+            $tempReportDirectory
+        );
+
+        $tempPdfPath =
+            $tempReportDirectory
+            . DIRECTORY_SEPARATOR
+            . $fileName;
 
         /*
         |--------------------------------------------------------------------------
@@ -214,13 +220,13 @@ class GenerateReportPdf implements ShouldQueue, ShouldBeEncrypted
         |--------------------------------------------------------------------------
         */
 
-        $tempDirectory =
+        $mpdfTempDirectory =
             storage_path(
                 'app/mpdf-temp'
             );
 
         File::ensureDirectoryExists(
-            $tempDirectory
+            $mpdfTempDirectory
         );
 
         /*
@@ -237,7 +243,7 @@ class GenerateReportPdf implements ShouldQueue, ShouldBeEncrypted
                 'A4',
 
             'tempDir' =>
-                $tempDirectory,
+                $mpdfTempDirectory,
         ]);
 
         $mpdf->autoScriptToLang = true;
@@ -253,34 +259,101 @@ class GenerateReportPdf implements ShouldQueue, ShouldBeEncrypted
 
         /*
         |--------------------------------------------------------------------------
-        | Save Final PDF
+        | Save Temporary Final PDF
         |--------------------------------------------------------------------------
         |
-        | مهم:
-        | الملف هنا يحتوي بالفعل على QR.
+        | الملف يحتوي هنا بالفعل على QR.
         |
         */
 
         $mpdf->Output(
-            $absolutePath,
+            $tempPdfPath,
             Destination::FILE
         );
+
+        if (!is_file($tempPdfPath)) {
+            throw new RuntimeException(
+                'REPORT_FILE_GENERATION_FAILED'
+            );
+        }
 
         /*
         |--------------------------------------------------------------------------
         | Calculate Final File Hash
         |--------------------------------------------------------------------------
         |
-        | الـ SHA-256 يجب أن يحسب بعد إضافة QR
-        | وبعد إنشاء النسخة النهائية من PDF.
+        | نحسب SHA-256 على النسخة النهائية بعد إضافة QR
+        | وقبل رفع الملف إلى الـ Bucket.
         |
         */
 
         $certificateService
             ->updateFileHash(
                 $certificate,
-                $absolutePath
+                $tempPdfPath
             );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Upload Final PDF
+        |--------------------------------------------------------------------------
+        */
+
+        $fileStream =
+            fopen(
+                $tempPdfPath,
+                'rb'
+            );
+
+        if ($fileStream === false) {
+            throw new RuntimeException(
+                'REPORT_FILE_OPEN_FAILED'
+            );
+        }
+
+        try {
+            $uploaded =
+                $disk->put(
+                    $relativePath,
+                    $fileStream
+                );
+        } finally {
+            fclose(
+                $fileStream
+            );
+        }
+
+        if (!$uploaded) {
+            throw new RuntimeException(
+                'REPORT_FILE_UPLOAD_FAILED'
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Verify Uploaded File Exists
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            !$disk->exists(
+                $relativePath
+            )
+        ) {
+            throw new RuntimeException(
+                'REPORT_FILE_UPLOAD_NOT_FOUND'
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Delete Temporary Local File
+        |--------------------------------------------------------------------------
+        */
+
+        File::delete(
+            $tempPdfPath
+        );
 
         /*
         |--------------------------------------------------------------------------
@@ -303,62 +376,136 @@ class GenerateReportPdf implements ShouldQueue, ShouldBeEncrypted
         ]);
     }
 
-
-    public function failed(Throwable $exception): void
-{
-    $export = ReportExport::find(
-        $this->exportId
-    );
-
-    if (!$export) {
-        return;
-    }
-
     /*
     |--------------------------------------------------------------------------
-    | Delete Incomplete File
+    | Failed Job
     |--------------------------------------------------------------------------
-    |
-    | إذا تم إنشاء ملف PDF ثم حدث الخطأ بعد ذلك
-    | مثل فشل حساب الـ hash، نحذف الملف غير المكتمل.
-    |
     */
 
-    if ($export->temporary_file_path) {
-        Storage::disk('local')->delete(
-            $export->temporary_file_path
-        );
-    } else {
+    public function failed(
+        Throwable $exception
+    ): void {
+
+        $export =
+            ReportExport::query()
+                ->with('certificate')
+                ->find(
+                    $this->exportId
+                );
+
+        if (!$export) {
+            return;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Reports Storage Disk
+        |--------------------------------------------------------------------------
+        */
+
+        $diskName =
+            config(
+                'filesystems.reports_disk',
+                'local'
+            );
+
+        $disk =
+            Storage::disk(
+                $diskName
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Possible Remote File Path
+        |--------------------------------------------------------------------------
+        */
+
         $possiblePath =
-            'report-exports/'
-            . $export->report_type
-            . '-'
-            . $export->id
-            . '.pdf';
+            $export->temporary_file_path
+            ?? (
+                'report-exports/'
+                . $export->report_type
+                . '-'
+                . $export->id
+                . '.pdf'
+            );
 
-        Storage::disk('local')->delete(
-            $possiblePath
-        );
+        /*
+        |--------------------------------------------------------------------------
+        | Delete Uploaded / Incomplete File
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            $disk->exists(
+                $possiblePath
+            )
+        ) {
+            $disk->delete(
+                $possiblePath
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Delete Temporary Local File
+        |--------------------------------------------------------------------------
+        */
+
+        $tempPdfPath =
+            storage_path(
+                'app/report-temp/'
+                . $export->report_type
+                . '-'
+                . $export->id
+                . '.pdf'
+            );
+
+        if (
+            File::exists(
+                $tempPdfPath
+            )
+        ) {
+            File::delete(
+                $tempPdfPath
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Clear Certificate File Hash
+        |--------------------------------------------------------------------------
+        |
+        | إذا فشل رفع الملف بعد حساب الـ hash،
+        | لا نريد الاحتفاظ بـ hash لملف غير متاح.
+        |
+        */
+
+        if ($export->certificate) {
+            $export->certificate->update([
+                'file_hash' =>
+                    null,
+            ]);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Mark Export As Failed
+        |--------------------------------------------------------------------------
+        */
+
+        $export->update([
+            'status' =>
+                ReportExport::STATUS_FAILED,
+
+            'temporary_file_path' =>
+                null,
+
+            'completed_at' =>
+                null,
+
+            'expires_at' =>
+                null,
+        ]);
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Mark Export As Failed
-    |--------------------------------------------------------------------------
-    */
-
-    $export->update([
-        'status' =>
-            ReportExport::STATUS_FAILED,
-
-        'temporary_file_path' =>
-            null,
-
-        'completed_at' =>
-            null,
-
-        'expires_at' =>
-            null,
-    ]);
-}
 }

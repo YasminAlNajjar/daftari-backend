@@ -17,7 +17,12 @@ class CleanupExpiredReportExports extends Command
     public function handle(): int
     {
         $disk =
-            Storage::disk('local');
+            Storage::disk(
+                config(
+                    'filesystems.reports_disk',
+                    'local'
+                )
+            );
 
         $deletedCount = 0;
 
@@ -44,7 +49,8 @@ class CleanupExpiredReportExports extends Command
                     &$deletedCount
                 ) {
                     foreach ($exports as $export) {
-                            /** @var ReportExport $export */
+
+                        /** @var ReportExport $export */
 
                         $disk->delete(
                             $export->temporary_file_path
