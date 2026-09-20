@@ -205,7 +205,7 @@
         isset($verificationUrl) &&
         isset($certificate)
     )
-        @include('reports.verification')
+        @include('reports.partials.verification')
     @endif
     <div class="footer">
         تم إنشاء هذا التقرير إلكترونيًا من نظام سند.
