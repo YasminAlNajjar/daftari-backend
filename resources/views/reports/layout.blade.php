@@ -201,8 +201,12 @@
 
     @yield('content')
 
-    @include('reports.verification')
-
+    @if(
+        isset($verificationUrl) &&
+        isset($certificate)
+    )
+        @include('reports.verification')
+    @endif
     <div class="footer">
         تم إنشاء هذا التقرير إلكترونيًا من نظام سند.
     </div>
