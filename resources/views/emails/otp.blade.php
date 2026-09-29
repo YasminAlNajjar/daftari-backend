@@ -2,11 +2,11 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>رمز التحقق - دفتري</title>
+    <title>رمز التحقق - سند</title>
 </head>
 <body>
 
-    <h2>دفتري</h2>
+    <h2>سند</h2>
 
     <p>رمز التحقق الخاص بك هو:</p>
 
