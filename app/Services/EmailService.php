@@ -34,7 +34,7 @@ class EmailService
                         ],
                     ],
 
-                    'subject' => 'رمز التحقق - دفتري',
+                    'subject' => 'رمز التحقق - سند',
 
                     'htmlContent' => "
                         <html>

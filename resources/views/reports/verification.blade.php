@@ -63,6 +63,10 @@
             padding: 10px 18px;
             cursor: pointer;
         }
+
+        #verification-result {
+            margin-top: 20px;
+        }
     </style>
 </head>
 
@@ -109,20 +113,6 @@
 
         </div>
 
-        @if($fileVerification === 'valid')
-
-            <div class="success">
-                ملف PDF المرفوع مطابق للنسخة الأصلية ولم يتم تعديله.
-            </div>
-
-        @elseif($fileVerification === 'modified')
-
-            <div class="warning">
-                ملف PDF المرفوع لا يطابق النسخة الأصلية أو تم تعديله.
-            </div>
-
-        @endif
-
         <form
             method="POST"
             action="{{ route('reports.verify.file', ['token' => $token]) }}"
@@ -158,9 +148,48 @@
 
         </form>
 
+        @if($fileVerification === 'valid')
+
+            <div
+                id="verification-result"
+                class="success"
+            >
+                ملف PDF المرفوع مطابق للنسخة الأصلية ولم يتم تعديله.
+            </div>
+
+        @elseif($fileVerification === 'modified')
+
+            <div
+                id="verification-result"
+                class="warning"
+            >
+                ملف PDF المرفوع لا يطابق النسخة الأصلية أو تم تعديله.
+            </div>
+
+        @endif
+
     @endif
 
 </div>
+
+@if($fileVerification !== null)
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const result = document.getElementById(
+            'verification-result'
+        );
+
+        if (result) {
+            result.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center'
+            });
+        }
+    });
+</script>
+
+@endif
 
 </body>
 </html>

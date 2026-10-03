@@ -20,7 +20,7 @@ class OtpMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'رمز التحقق - دفتري',
+            subject: 'رمز التحقق - سند',
         );
     }
 
