@@ -7,6 +7,8 @@ use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\ReportExportController;
 use App\Http\Controllers\Api\ReportVerificationController;
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\DeviceTokenController;
 
 Route::prefix('auth/otp')->group(function () {
     Route::post('/send', [AuthController::class, 'sendOtp']);
@@ -39,8 +41,27 @@ Route::middleware('auth:sanctum')->group(function () {
 //export report 
     Route::post('/reports/exports', [ReportExportController::class, 'store']);
     Route::get('/reports/exports/{id}', [ReportExportController::class, 'show'])->whereNumber('id');
-    Route::get('/reports/exports/{export}/download',[ReportExportController::class, 'download'])->whereNumber('export');
+    Route::get('/reports/exports/{export}/download', [ReportExportController::class, 'download'])->whereNumber('export');
 //QR
-    Route::get('/reports/verify/{token}',[ReportVerificationController::class, 'verify']);
+    Route::get('/reports/verify/{token}', [ReportVerificationController::class, 'verify']);
+// notifications
+   Route::get('/notifications', [NotificationController::class, 'index']);
+   Route::get('/notifications/unread-count',[NotificationController::class, 'unreadCount']);
+   Route::patch('/notifications/{id}/read',[NotificationController::class, 'markAsRead'])->whereNumber('id');
+    Route::post('/device-tokens',[DeviceTokenController::class, 'store']);
+    Route::delete('/device-tokens',[DeviceTokenController::class, 'destroy']);
+   
+   
+ 
+    
 
-});
+
+
+
+
+
+    
+   });
+  
+
+   

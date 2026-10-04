@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\CompleteProfileRequest;
+use App\Http\Requests\Auth\LogoutRequest;
 use App\Http\Requests\Auth\SendOtpRequest;
 use App\Http\Requests\Auth\VerifyOtpRequest;
 use App\Models\User;
@@ -285,7 +286,16 @@ class AuthController extends Controller
         );
     }
 
-    public function logout(Request $request ): JsonResponse {
+    public function logout(LogoutRequest $request): JsonResponse {
+        $validated = $request->validated();
+
+        if (!empty($validated['device_token'])) {
+            $request->user()
+                ->deviceTokens()
+                ->where('token', $validated['device_token'])
+                ->delete();
+        }
+
         $request->user()
             ->currentAccessToken()
             ->delete();

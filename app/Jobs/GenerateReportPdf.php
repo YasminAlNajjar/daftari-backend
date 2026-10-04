@@ -17,6 +17,10 @@ use Mpdf\Mpdf;
 use Mpdf\Output\Destination;
 use RuntimeException;
 use Throwable;
+use App\Enums\UserNotificationType;
+use App\Services\Notifications\NotificationService;
+use Illuminate\Support\Facades\Log;
+use App\Models\User;
 
 class GenerateReportPdf implements ShouldQueue, ShouldBeEncrypted
 {
@@ -374,6 +378,43 @@ class GenerateReportPdf implements ShouldQueue, ShouldBeEncrypted
             'expires_at' =>
                 now()->addHours(24),
         ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Create Report Ready Notification
+        |--------------------------------------------------------------------------
+        */
+
+        try {
+                $user = User::find( $export->user_id );
+
+                if ($user) 
+                {
+                    $notificationService = app( NotificationService::class );
+
+                    $notificationService->create(
+                            $user,
+                            UserNotificationType::REPORT_READY,
+                            'التقرير جاهز',
+                            'تم إنشاء التقرير بنجاح وأصبح جاهزًا للتنزيل.',
+                            [
+                                'export_id' => $export->id,
+
+                                'report_type' => $export->report_type,
+                            ]
+                    );
+                 }
+        } catch (Throwable $notificationException) 
+            {
+                Log::error(
+                    'Failed to create REPORT_READY notification.',
+                    [
+                        'export_id' => $export->id,
+
+                        'error' => $notificationException->getMessage(),
+                    ]
+                );
+            }
     }
 
     /*
@@ -507,5 +548,48 @@ class GenerateReportPdf implements ShouldQueue, ShouldBeEncrypted
             'expires_at' =>
                 null,
         ]);
+
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Create Report Failed Notification
+        |--------------------------------------------------------------------------
+        */
+
+        try {
+                $user = User::find( $export->user_id );
+
+                if ($user) 
+                {
+                    $notificationService =
+                    app( NotificationService::class);
+ 
+                    $notificationService->create(
+                            $user,
+                            UserNotificationType::REPORT_FAILED,
+                            'فشل إنشاء التقرير',
+                            'تعذر إنشاء التقرير. يرجى المحاولة مرة أخرى.',
+                            [
+                                'export_id' => $export->id,
+
+                                'report_type' => $export->report_type,
+                            ]
+                    );
+                }
+            } catch (Throwable $notificationException) 
+                {
+                    Log::error(
+                        'Failed to create REPORT_FAILED notification.',
+                        [
+                            'export_id' => $export->id,
+
+                            'error' => $notificationException->getMessage(),
+                        ]
+                    );
+                }       
     }
+
+
+
 }

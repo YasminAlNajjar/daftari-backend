@@ -11,20 +11,41 @@ use App\Http\Resources\TransactionListResource;
 use App\Http\Resources\TransactionResource;
 use App\Models\Customer;
 use App\Models\Transaction;
+use App\Services\Notifications\CreditLimitNotificationService;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class TransactionController extends Controller
 {
+    public function __construct(
+        private CreditLimitNotificationService $creditLimitNotifications
+    ) {
+    }
 
-    public function store(StoreTransactionRequest $request,int $customer): JsonResponse {
+    public function store(StoreTransactionRequest $request, int $customer): JsonResponse
+    {
+        return DB::transaction(
+            fn () => $this->storeWithinTransaction($request, $customer),
+            3
+        );
+    }
+
+    private function storeWithinTransaction(
+        StoreTransactionRequest $request,
+        int $customer
+    ): JsonResponse
+    {
         $customerModel = $this->findOwnedCustomerOrFail(
             $request,
-            $customer
+            $customer,
+            true
         );
 
         $validated = $request->validated();
+        $currentDebt = null;
+        $resultingDebt = null;
 
         /*
          * فحص Credit Limit عند إضافة Debt.
@@ -49,10 +70,20 @@ class TransactionController extends Controller
                 min($newBalance, 0)
             );
 
+            $currentDebt = abs(
+                min($currentBalance, 0)
+            );
+
             if (
                 $resultingDebt >
                 (float) $customerModel->credit_limit
             ) {
+                $this->creditLimitNotifications->notifyExceededAttempt(
+                    $request->user(),
+                    $customerModel,
+                    $resultingDebt
+                );
+
                 return ApiResponse::error(
                     'هذه العملية تتجاوز سقف الدين المحدد للزبون.',
                     'CREDIT_LIMIT_EXCEEDED',
@@ -74,6 +105,16 @@ class TransactionController extends Controller
             ]);
 
         $customerModel->refresh();
+
+        if ($currentDebt !== null && $resultingDebt !== null) {
+            $this->creditLimitNotifications->notifyIfThresholdCrossed(
+                $request->user(),
+                $customerModel,
+                $currentDebt,
+                $resultingDebt,
+                $transaction->id
+            );
+        }
 
         return ApiResponse::success(
             'تمت إضافة المعاملة بنجاح.',
@@ -178,10 +219,28 @@ class TransactionController extends Controller
     }
 
 
-    public function update(UpdateTransactionRequest $request,int $customer,int $transaction): JsonResponse {
+    public function update(UpdateTransactionRequest $request, int $customer, int $transaction): JsonResponse
+    {
+        return DB::transaction(
+            fn () => $this->updateWithinTransaction(
+                $request,
+                $customer,
+                $transaction
+            ),
+            3
+        );
+    }
+
+    private function updateWithinTransaction(
+        UpdateTransactionRequest $request,
+        int $customer,
+        int $transaction
+    ): JsonResponse
+    {
         $customerModel = $this->findOwnedCustomerOrFail(
             $request,
-            $customer
+            $customer,
+            true
         );
 
         $transactionModel =
@@ -261,6 +320,12 @@ class TransactionController extends Controller
             && $resultingDebt >
                 (float) $customerModel->credit_limit
         ) {
+            $this->creditLimitNotifications->notifyExceededAttempt(
+                $request->user(),
+                $customerModel,
+                $resultingDebt
+            );
+
             return ApiResponse::error(
                 'هذه العملية تتجاوز سقف الدين المحدد للزبون.',
                 'CREDIT_LIMIT_EXCEEDED',
@@ -273,6 +338,16 @@ class TransactionController extends Controller
         $transactionModel->refresh();
         $customerModel->refresh();
 
+        if ($customerModel->credit_limit !== null) {
+            $this->creditLimitNotifications->notifyIfThresholdCrossed(
+                $request->user(),
+                $customerModel,
+                $currentDebt,
+                $resultingDebt,
+                $transactionModel->id
+            );
+        }
+
         return ApiResponse::success(
             'تم تعديل المعاملة بنجاح.',
             [
@@ -284,10 +359,28 @@ class TransactionController extends Controller
         );
     }
 
-    public function destroy(Request $request,int $customer,int $transaction): JsonResponse {
+    public function destroy(Request $request, int $customer, int $transaction): JsonResponse
+    {
+        return DB::transaction(
+            fn () => $this->destroyWithinTransaction(
+                $request,
+                $customer,
+                $transaction
+            ),
+            3
+        );
+    }
+
+    private function destroyWithinTransaction(
+        Request $request,
+        int $customer,
+        int $transaction
+    ): JsonResponse
+    {
         $customerModel = $this->findOwnedCustomerOrFail(
             $request,
-            $customer
+            $customer,
+            true
         );
 
         $transactionModel =
@@ -317,10 +410,20 @@ class TransactionController extends Controller
 
 
 //***********************  Helper Functions ***************************
-    private function findOwnedCustomerOrFail(Request $request,int $customerId ): Customer {
-        $customer = $request->user()
+    private function findOwnedCustomerOrFail(
+        Request $request,
+        int $customerId,
+        bool $lockForUpdate = false
+    ): Customer {
+        $query = $request->user()
             ->customers()
-            ->find($customerId);
+            ->whereKey($customerId);
+
+        if ($lockForUpdate) {
+            $query->lockForUpdate();
+        }
+
+        $customer = $query->first();
 
         if (! $customer) {
             throw new HttpResponseException(

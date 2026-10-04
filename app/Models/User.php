@@ -20,17 +20,11 @@ class User extends Authenticatable
         'business_activity_type',
     ];
 
-    /**
-     * الزبائن التابعون لهذا المستخدم.
-     */
     public function customers(): HasMany
     {
         return $this->hasMany(Customer::class);
     }
 
-    /**
-     * جميع المعاملات التي سجلها المستخدم.
-     */
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
@@ -38,6 +32,16 @@ class User extends Authenticatable
 
     public function reportCertificates(): HasMany
     {
-    return $this->hasMany(ReportCertificate::class);
+        return $this->hasMany(ReportCertificate::class);
+    }
+
+    public function userNotifications(): HasMany
+    {
+        return $this->hasMany(UserNotification::class);
+    }
+    
+    public function deviceTokens(): HasMany
+    {
+        return $this->hasMany(DeviceToken::class);
     }
 }

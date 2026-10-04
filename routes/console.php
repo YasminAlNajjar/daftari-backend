@@ -13,3 +13,11 @@ Artisan::command('inspire', function () {
 Schedule::command(
     'reports:cleanup-expired'
 )->hourly();
+
+Schedule::command(
+    'notifications:send-daily-reminders'
+)->dailyAt(
+    config('notifications.daily_reminder_time')
+)->timezone(
+    config('notifications.timezone')
+)->withoutOverlapping();

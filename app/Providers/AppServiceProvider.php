@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Contracts\PushNotificationSender;
+use App\Services\Notifications\FirebasePushNotificationSender;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\URL;
 
@@ -12,7 +14,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(
+            PushNotificationSender::class,
+            FirebasePushNotificationSender::class
+        );
     }
 
     /**
