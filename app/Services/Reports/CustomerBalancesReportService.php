@@ -77,8 +77,9 @@ class CustomerBalancesReportService extends BaseReportService
             );
 
         $customers =
-            $prepared['query']
-                ->get()
+            $this->boundedExportRows(
+                $prepared['query']
+            )
                 ->map(
                     fn ($customer) =>
                         $this->formatCustomer(

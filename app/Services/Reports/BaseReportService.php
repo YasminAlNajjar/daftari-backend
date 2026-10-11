@@ -7,6 +7,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use App\Exceptions\InvalidPaginationPageException;
 use Illuminate\Database\Query\Builder;
+use RuntimeException;
 
 abstract class BaseReportService
 {
@@ -152,6 +153,29 @@ abstract class BaseReportService
             )
             ->values()
             ->all();
+    }
+
+    /**
+     * Bound export memory without changing paginated API report responses.
+     */
+    protected function boundedExportRows(Builder $query): Collection
+    {
+        $maxRows = (int) config(
+            'reports.max_export_rows',
+            10000
+        );
+
+        $rows = (clone $query)
+            ->limit($maxRows + 1)
+            ->get();
+
+        if ($rows->count() > $maxRows) {
+            throw new RuntimeException(
+                'REPORT_EXPORT_ROW_LIMIT_EXCEEDED'
+            );
+        }
+
+        return $rows;
     }
 
     /*

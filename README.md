@@ -21,6 +21,17 @@ Laravel is a web application framework with expressive, elegant syntax. We belie
 
 Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
+## Queue workers
+
+Reports and notifications use separate queues so a long PDF export does not delay push notifications. In production, run both workers (preferably under Supervisor or another process manager):
+
+```bash
+php artisan queue:work --queue=notifications,default --tries=4 --timeout=60
+php artisan queue:work --queue=reports --tries=2 --timeout=300
+```
+
+Keep `DB_QUEUE_RETRY_AFTER` greater than the report worker timeout. The default is `360` seconds. Export size and queue names can be configured with `REPORT_EXPORT_MAX_ROWS`, `REPORTS_QUEUE`, and `NOTIFICATIONS_QUEUE`.
+
 ## Learning Laravel
 
 Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.

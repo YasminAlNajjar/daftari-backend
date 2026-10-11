@@ -24,7 +24,9 @@ class SendPushNotification implements ShouldQueue
     public function __construct(
         public int $notificationId,
         public int $deviceTokenId
-    ) {}
+    ) {
+        $this->onQueue(config('notifications.queue', 'notifications'));
+    }
 
     public function backoff(): array
     {

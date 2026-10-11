@@ -76,7 +76,9 @@ class DailyInventoryReportService extends BaseReportService
 
         $transactions =
             $this->formatTransactionsCollection(
-                $prepared['query']->get(),
+                $this->boundedExportRows(
+                    $prepared['query']
+                ),
                 includeCustomer: true
             );
 

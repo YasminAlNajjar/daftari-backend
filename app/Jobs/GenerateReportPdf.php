@@ -29,10 +29,25 @@ class GenerateReportPdf implements ShouldQueue, ShouldBeEncrypted
     use Queueable;
     use SerializesModels;
 
+    public int $tries = 2;
+
+    public int $timeout = 300;
+
+    public bool $failOnTimeout = true;
+
     public function __construct(
         public int $exportId,
         public string $verificationToken
     ) {
+        $this->onQueue(config('reports.queue', 'reports'));
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    public function backoff(): array
+    {
+        return [60];
     }
 
     public function handle(

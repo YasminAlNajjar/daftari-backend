@@ -138,6 +138,7 @@ class CustomerController extends Controller
 
         $customers = $request->user()
             ->customers()
+            ->withBalance()
 
         /*
          * البحث بالاسم أو رقم الهاتف.
