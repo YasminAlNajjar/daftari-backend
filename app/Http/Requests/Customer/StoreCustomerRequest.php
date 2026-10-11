@@ -25,7 +25,7 @@ class StoreCustomerRequest extends FormRequest
              * ونحذف المسافات والشرطات والأقواس من باقي الرقم.
              */
             if (str_starts_with($phone, '+')) {
-                $phone = '+' . (
+                $phone = '+'.(
                     preg_replace(
                         '/\D+/',
                         '',
@@ -42,7 +42,31 @@ class StoreCustomerRequest extends FormRequest
 
     public function rules(): array
     {
+        $clientUuid = $this->input('client_uuid');
+
+        $uniquePhoneRule = Rule::unique('customers', 'phone')
+            ->where(function ($query) use ($clientUuid) {
+                $query
+                    ->where('user_id', $this->user()->id)
+                    ->whereNull('deleted_at');
+
+                if (is_string($clientUuid) && $clientUuid !== '') {
+                    $query->where(function ($query) use ($clientUuid) {
+                        $query
+                            ->whereNull('client_uuid')
+                            ->orWhere('client_uuid', '!=', $clientUuid);
+                    });
+                }
+
+                return $query;
+            });
+
         return [
+            'client_uuid' => [
+                'nullable',
+                'uuid',
+            ],
+
             'name' => [
                 'required',
                 'string',
@@ -53,16 +77,7 @@ class StoreCustomerRequest extends FormRequest
                 'required',
                 'string',
                 'regex:/^\+(?:970|972)(?:59|56)\d{7}$/',
-
-                Rule::unique('customers', 'phone')
-                    ->where(function ($query) {
-                        return $query
-                            ->where(
-                                'user_id',
-                                $this->user()->id
-                            )
-                            ->whereNull('deleted_at');
-                    }),
+                $uniquePhoneRule,
             ],
 
             'credit_limit' => [
@@ -83,44 +98,31 @@ class StoreCustomerRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.required'
-                => 'اسم الزبون مطلوب.',
+            'client_uuid.uuid' => 'معرّف المزامنة غير صالح.',
 
-            'name.string'
-                => 'اسم الزبون يجب أن يكون نصًا.',
+            'name.required' => 'اسم الزبون مطلوب.',
 
-            'name.max'
-                => 'اسم الزبون يجب ألا يتجاوز 100 حرف.',
+            'name.string' => 'اسم الزبون يجب أن يكون نصًا.',
 
+            'name.max' => 'اسم الزبون يجب ألا يتجاوز 100 حرف.',
 
-            'phone.required'
-                => 'رقم هاتف الزبون مطلوب.',
+            'phone.required' => 'رقم هاتف الزبون مطلوب.',
 
-            'phone.string'
-                => 'رقم هاتف الزبون غير صالح.',
+            'phone.string' => 'رقم هاتف الزبون غير صالح.',
 
-            'phone.regex'
-                => 'رقم هاتف الزبون يجب أن يكون بالصيغة الدولية الصحيحة.',
+            'phone.regex' => 'رقم هاتف الزبون يجب أن يكون بالصيغة الدولية الصحيحة.',
 
-            'phone.unique'
-                => 'يوجد زبون مسجل بهذا الرقم مسبقًا.',
+            'phone.unique' => 'يوجد زبون مسجل بهذا الرقم مسبقًا.',
 
+            'credit_limit.numeric' => 'سقف الدين يجب أن يكون رقمًا.',
 
-            'credit_limit.numeric'
-                => 'سقف الدين يجب أن يكون رقمًا.',
+            'credit_limit.min' => 'سقف الدين يجب ألا يكون أقل من صفر.',
 
-            'credit_limit.min'
-                => 'سقف الدين يجب ألا يكون أقل من صفر.',
+            'credit_limit.max' => 'قيمة سقف الدين أكبر من الحد المسموح.',
 
-            'credit_limit.max'
-                => 'قيمة سقف الدين أكبر من الحد المسموح.',
+            'notes.string' => 'الملاحظات يجب أن تكون نصًا.',
 
-
-            'notes.string'
-                => 'الملاحظات يجب أن تكون نصًا.',
-
-            'notes.max'
-                => 'الملاحظات يجب ألا تتجاوز 1000 حرف.',
+            'notes.max' => 'الملاحظات يجب ألا تتجاوز 1000 حرف.',
         ];
     }
 }

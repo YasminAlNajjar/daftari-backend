@@ -16,6 +16,11 @@ class StoreTransactionRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'client_uuid' => [
+                'nullable',
+                'uuid',
+            ],
+
             'type' => [
                 'required',
                 Rule::in(Transaction::types()),
@@ -45,38 +50,29 @@ class StoreTransactionRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'type.required'
-                => 'نوع المعاملة مطلوب.',
+            'client_uuid.uuid' => 'معرّف المزامنة غير صالح.',
 
-            'type.in'
-                => 'نوع المعاملة غير صالح.',
+            'type.required' => 'نوع المعاملة مطلوب.',
 
-            'amount.required'
-                => 'مبلغ المعاملة مطلوب.',
+            'type.in' => 'نوع المعاملة غير صالح.',
 
-            'amount.numeric'
-                => 'مبلغ المعاملة يجب أن يكون رقمًا.',
+            'amount.required' => 'مبلغ المعاملة مطلوب.',
 
-            'amount.gt'
-                => 'مبلغ المعاملة يجب أن يكون أكبر من صفر.',
+            'amount.numeric' => 'مبلغ المعاملة يجب أن يكون رقمًا.',
 
-            'amount.max'
-                => 'مبلغ المعاملة أكبر من الحد المسموح.',
+            'amount.gt' => 'مبلغ المعاملة يجب أن يكون أكبر من صفر.',
 
-            'transaction_date.required'
-                => 'تاريخ المعاملة مطلوب.',
+            'amount.max' => 'مبلغ المعاملة أكبر من الحد المسموح.',
 
-            'transaction_date.date'
-                => 'تاريخ المعاملة غير صالح.',
+            'transaction_date.required' => 'تاريخ المعاملة مطلوب.',
 
-            'transaction_date.before_or_equal'
-                => 'تاريخ المعاملة لا يمكن أن يكون في المستقبل.',
+            'transaction_date.date' => 'تاريخ المعاملة غير صالح.',
 
-            'description.string'
-                => 'وصف المعاملة يجب أن يكون نصًا.',
+            'transaction_date.before_or_equal' => 'تاريخ المعاملة لا يمكن أن يكون في المستقبل.',
 
-            'description.max'
-                => 'وصف المعاملة يجب ألا يتجاوز 1000 حرف.',
+            'description.string' => 'وصف المعاملة يجب أن يكون نصًا.',
+
+            'description.max' => 'وصف المعاملة يجب ألا يتجاوز 1000 حرف.',
         ];
     }
 }

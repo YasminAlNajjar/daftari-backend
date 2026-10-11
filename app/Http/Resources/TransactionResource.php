@@ -11,6 +11,7 @@ class TransactionResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'client_uuid' => $this->client_uuid,
             'customer_id' => $this->customer_id,
             'type' => $this->type,
             'amount' => number_format(

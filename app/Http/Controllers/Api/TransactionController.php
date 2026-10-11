@@ -12,9 +12,11 @@ use App\Http\Resources\TransactionResource;
 use App\Models\Customer;
 use App\Models\Transaction;
 use App\Services\Notifications\CreditLimitNotificationService;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class TransactionController extends Controller
@@ -26,10 +28,43 @@ class TransactionController extends Controller
 
     public function store(StoreTransactionRequest $request, int $customer): JsonResponse
     {
-        return DB::transaction(
-            fn () => $this->storeWithinTransaction($request, $customer),
-            3
-        );
+        try {
+            return DB::transaction(
+                fn () => $this->storeWithinTransaction($request, $customer),
+                3
+            );
+        } catch (UniqueConstraintViolationException $exception) {
+            /*
+             * إذا سبقنا طلب متزامن يحمل UUID نفسه، تكون المعاملة
+             * قد حُفظت بعد بدء هذا الطلب. نقرأها بعد rollback.
+             */
+            $validated = $request->validated();
+            $clientUuid = $validated['client_uuid'] ?? null;
+
+            if ($clientUuid === null) {
+                throw $exception;
+            }
+
+            $existingTransaction = $this->findTransactionByClientUuid(
+                $request,
+                $clientUuid
+            );
+
+            if ($existingTransaction === null) {
+                throw $exception;
+            }
+
+            $customerModel = $this->findOwnedCustomerOrFail(
+                $request,
+                $customer
+            );
+
+            return $this->existingTransactionResponse(
+                $existingTransaction,
+                $customerModel,
+                $validated
+            );
+        }
     }
 
     private function storeWithinTransaction(
@@ -44,6 +79,27 @@ class TransactionController extends Controller
         );
 
         $validated = $request->validated();
+        $clientUuid = $validated['client_uuid'] ?? null;
+
+        /*
+         * يجب فحص UUID قبل Credit Limit. فالطلب قد يكون Retry
+         * لمعاملة سبق حفظها وأصبح مبلغها محسوبًا ضمن الرصيد.
+         */
+        if ($clientUuid !== null) {
+            $existingTransaction = $this->findTransactionByClientUuid(
+                $request,
+                $clientUuid
+            );
+
+            if ($existingTransaction !== null) {
+                return $this->existingTransactionResponse(
+                    $existingTransaction,
+                    $customerModel,
+                    $validated
+                );
+            }
+        }
+
         $currentDebt = null;
         $resultingDebt = null;
 
@@ -96,6 +152,7 @@ class TransactionController extends Controller
             ->transactions()
             ->create([
                 'user_id' => $request->user()->id,
+                'client_uuid' => $clientUuid,
                 'type' => $validated['type'],
                 'amount' => $validated['amount'],
                 'description' =>
@@ -126,6 +183,76 @@ class TransactionController extends Controller
             ],
             201
         );
+    }
+
+    private function findTransactionByClientUuid(
+        StoreTransactionRequest $request,
+        string $clientUuid
+    ): ?Transaction {
+        return $request->user()
+            ->transactions()
+            ->withTrashed()
+            ->where('client_uuid', $clientUuid)
+            ->first();
+    }
+
+    private function existingTransactionResponse(
+        Transaction $transaction,
+        Customer $customer,
+        array $validated
+    ): JsonResponse {
+        if (
+            $transaction->trashed()
+            || ! $this->transactionMatchesRequest(
+                $transaction,
+                $customer,
+                $validated
+            )
+        ) {
+            return ApiResponse::error(
+                'معرّف المزامنة مستخدم مسبقًا مع بيانات مختلفة.',
+                'CLIENT_UUID_CONFLICT',
+                409
+            );
+        }
+
+        $customer->refresh();
+
+        return ApiResponse::success(
+            'المعاملة متزامنة مسبقًا.',
+            [
+                'transaction' => new TransactionResource($transaction),
+                'balance' => $customer->balance,
+            ],
+            200
+        );
+    }
+
+    private function transactionMatchesRequest(
+        Transaction $transaction,
+        Customer $customer,
+        array $validated
+    ): bool {
+        return (int) $transaction->customer_id === (int) $customer->id
+            && $transaction->type === $validated['type']
+            && $this->normalizeMoney($transaction->amount)
+                === $this->normalizeMoney($validated['amount'])
+            && $transaction->description
+                === ($validated['description'] ?? null)
+            && $this->normalizeDateTime($transaction->transaction_date)
+                === $this->normalizeDateTime(
+                    $validated['transaction_date']
+                );
+    }
+
+    private function normalizeMoney(mixed $value): string
+    {
+        return number_format((float) $value, 2, '.', '');
+    }
+
+    private function normalizeDateTime(mixed $value): string
+    {
+        return Carbon::parse($value)->format('Y-m-d H:i:s');
     }
 
 

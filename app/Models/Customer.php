@@ -17,6 +17,7 @@ class Customer extends Model
         'phone',
         'notes',
         'credit_limit',
+        'client_uuid'
     ];
 
     protected function casts(): array

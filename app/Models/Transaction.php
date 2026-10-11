@@ -21,6 +21,7 @@ class Transaction extends Model
         'amount',
         'description',
         'transaction_date',
+        'client_uuid'
     ];
 
     protected function casts(): array
