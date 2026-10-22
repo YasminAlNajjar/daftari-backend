@@ -19,6 +19,7 @@ Route::post('/auth/complete-profile', [AuthController::class, 'completeProfile']
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::patch('/auth/me/phone', [AuthController::class, 'updatePhone']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 //Customer routes
     Route::post('/customers', [CustomerController::class, 'store']);

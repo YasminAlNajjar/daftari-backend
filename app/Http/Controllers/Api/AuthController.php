@@ -14,6 +14,7 @@ use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
+use App\Http\Requests\Auth\UpdatePhoneRequest;
 
 class AuthController extends Controller
 {
@@ -272,6 +273,28 @@ class AuthController extends Controller
 
         return ApiResponse::success(
             'تم جلب بيانات المستخدم بنجاح.',
+            [
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'phone' => $user->phone,
+                    'email' => $user->email,
+                    'address' => $user->address,
+                    'business_activity_type'
+                        => $user->business_activity_type,
+                ],
+            ]
+        );
+    }
+
+    public function updatePhone(UpdatePhoneRequest $request): JsonResponse {
+       $user = $request->user();
+       $user->update([
+            'phone'=> $request->validate('phone'),
+        ]);
+
+        return ApiResponse::success(
+            'تم تحديث رقم الهاتف بنجاح.',
             [
                 'user' => [
                     'id' => $user->id,
