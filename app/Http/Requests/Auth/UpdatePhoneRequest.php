@@ -45,7 +45,7 @@ class UpdatePhoneRequest extends FormRequest
             'phone' =>[
                 'required',
                 'string',
-                'regex:/^\+(?:970|972)(?:59|56)',
+                'regex:/^\+(?:970|972)(?:59|56)\d{7}$/',
                 Rule::unique('users','phone') -> ignore($this->user()->id),
             ]
         ];

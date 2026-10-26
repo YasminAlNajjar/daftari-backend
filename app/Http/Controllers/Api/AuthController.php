@@ -289,8 +289,17 @@ class AuthController extends Controller
 
     public function updatePhone(UpdatePhoneRequest $request): JsonResponse {
        $user = $request->user();
+       $phone = $request->validated('phone');
+       
+        if ($user->phone === $phone) {
+            return ApiResponse::error(
+                'رقم الهاتف الجديد مطابق للرقم الحالي.',
+                'PHONE_UNCHANGED',
+                422
+            );
+        }
        $user->update([
-            'phone'=> $request->validate('phone'),
+            'phone'=> $phone,
         ]);
 
         return ApiResponse::success(
